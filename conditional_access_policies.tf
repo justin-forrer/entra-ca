@@ -30,6 +30,7 @@ locals {
       grant = {
         built_in_controls = ["mfa"]
       }
+      state = "enabled"
     }
   }
 }
