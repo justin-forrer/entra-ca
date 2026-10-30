@@ -81,14 +81,15 @@ These are built into the configuration and apply to every policy:
 | Key | Display name | State | Effect |
 | --- | --- | --- | --- |
 | `ca001_block_legacy_auth` | CA001 - Block Legacy Authentication | `enabled` | Blocks `exchangeActiveSync` and `other` (legacy) clients for all users. |
-| `ca002_mfa_admins` | CA002 - Require MFA for Administrators | report-only | Requires MFA for Global Admin, Privileged Role Admin, Security Admin, and Conditional Access Admin. |
-| `ca003_mfa_all_users` | CA003 - Require MFA for All Users | report-only | Requires MFA for all users. |
+| `ca002_mfa_admins` | CA002 - Require MFA for Administrators | `enabled` | Requires MFA for Global Admin, Privileged Role Admin, Security Admin, and Conditional Access Admin. |
+| `ca003_mfa_all_users` | CA003 - Require MFA for All Users | `enabled` | Requires MFA for all users. |
 
 ## Adding a policy
 
 Add an entry to `local.policies` in `conditional_access_policies.tf`. The key becomes the
-`for_each` address, so pick it carefully — renaming it later destroys and recreates the
-policy (and `prevent_destroy` will block that).
+`for_each` address, so pick it carefully — renaming it plans a destroy and recreate
+(which `prevent_destroy` will block) unless you add a `moved` block in `main.tf` mapping
+the old key to the new one.
 
 ```hcl
 ca004_block_unmanaged_devices = {
