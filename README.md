@@ -123,13 +123,22 @@ Defined by the `policies` variable in `modules/conditional-access/variables.tf`.
 | `excluded_groups` | `list(string)` | unset (break-glass group always appended) |
 | `included_roles` | `list(string)` | unset |
 | `excluded_roles` | `list(string)` | unset |
+| `sign_in_risk_levels` | `list(string)` | unset (requires P2) |
+| `user_risk_levels` | `list(string)` | unset (requires P2) |
+| `authentication_flow_transfer_methods` | `list(string)` | unset (`deviceCodeFlow`, `authenticationTransfer`) |
 | `grant.operator` | `string` | `"OR"` |
 | `grant.built_in_controls` | `list(string)` | unset |
 | `grant.authentication_strength_policy_id` | `string` | unset |
+| `session.sign_in_frequency` | `number` | unset |
+| `session.sign_in_frequency_period` | `string` | unset |
+| `session.sign_in_frequency_interval` | `string` | unset |
+| `session.sign_in_frequency_authentication_type` | `string` | unset |
+| `session.persistent_browser_mode` | `string` | unset |
+| `session.disable_resilience_defaults` | `bool` | unset |
+| `session.application_enforced_restrictions_enabled` | `bool` | unset |
 
-Omit `grant` entirely for a policy with no grant controls; the module only emits the
-`grant_controls` block when `grant` is non-null. Session controls are not currently
-supported by the module.
+Omit `grant` or `session` entirely when a policy needs no grant or session controls; the
+module only emits the `grant_controls` / `session_controls` blocks when they are non-null.
 
 ## Notes
 

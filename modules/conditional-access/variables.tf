@@ -20,10 +20,25 @@ variable "policies" {
     included_roles  = optional(list(string))
     excluded_roles  = optional(list(string))
 
+    sign_in_risk_levels = optional(list(string))
+    user_risk_levels    = optional(list(string))
+
+    authentication_flow_transfer_methods = optional(list(string))
+
     grant = optional(object({
       operator                          = optional(string, "OR")
       built_in_controls                 = optional(list(string))
       authentication_strength_policy_id = optional(string)
+    }))
+    session = optional(object({
+      sign_in_frequency                         = optional(number)
+      sign_in_frequency_period                  = optional(string)
+      sign_in_frequency_interval                = optional(string)
+      sign_in_frequency_authentication_type     = optional(string)
+      persistent_browser_mode                   = optional(string)
+      disable_resilience_defaults               = optional(bool)
+      application_enforced_restrictions_enabled = optional(bool)
+
     }))
   }))
 
