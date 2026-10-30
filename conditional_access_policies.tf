@@ -40,6 +40,7 @@ locals {
       grant = {
         built_in_controls = ["block"]
       }
+      state = "enabled"
     }
 
     ca005_mfa_risky_signins = {
