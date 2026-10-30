@@ -21,6 +21,7 @@ locals {
       grant = {
         built_in_controls = ["mfa"]
       }
+      state = "enabled"
     }
 
     ca003_mfa_all_users = {
