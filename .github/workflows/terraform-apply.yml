@@ -1,0 +1,51 @@
+name: Terraform Apply
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: terraform-apply
+  cancel-in-progress: false
+
+env:
+  ARM_USE_OIDC: true
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+  TF_VAR_break_glass_group_object_id: ${{ secrets.BREAK_GLASS_GROUP_OBJECT_ID }}
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID_APPLY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.17.1
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        run: terraform init -input=false
+
+      - name: Terraform Plan
+        run: |
+          terraform plan -no-color -input=false -lock-timeout=5m -out=tfplan > plan.txt 2> plan.err || { cat plan.err; exit 1; }
+          grep -E '^(Plan:|No changes\.|Changes to Outputs:)' plan.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Terraform Apply
+        run: |
+          terraform apply -no-color -input=false -lock-timeout=5m tfplan > apply.txt 2> apply.err || { cat apply.err; exit 1; }
+          grep -E '^Apply complete' apply.txt >> "$GITHUB_STEP_SUMMARY"
