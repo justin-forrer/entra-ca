@@ -1,27 +1,11 @@
-resource "azuread_conditional_access_policy" "ca001_block_legacy_auth" {
-  display_name = "CA001 - Block Legacy Authentication"
-  state        = "enabledForReportingButNotEnforced"
+module "conditional_access" {
+  source = "./modules/conditional-access"
 
-  conditions {
-    client_app_types = ["exchangeActiveSync", "other"]
+  break_glass_group_id = data.azuread_group.break_glass.object_id
+  policies             = local.policies
+}
 
-    applications {
-      included_applications = ["All"]
-    }
-
-    users {
-      included_users  = ["All"]
-      excluded_groups = [data.azuread_group.break_glass.object_id]
-    }
-  }
-
-  grant_controls {
-    operator          = "OR"
-    built_in_controls = ["block"]
-  }
-
-  lifecycle {
-    prevent_destroy = true
-  }
-
+moved {
+  from = azuread_conditional_access_policy.ca001_block_legacy_auth
+  to   = module.conditional_access.azuread_conditional_access_policy.this["ca001_block_legacy_auth"]
 }
