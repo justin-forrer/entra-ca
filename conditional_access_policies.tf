@@ -32,5 +32,14 @@ locals {
       }
       state = "enabled"
     }
+
+    ca004_block_device_code_flow = {
+      display_name                         = "CA004 - Block Device Code Flow"
+      included_users                       = ["All"]
+      authentication_flow_transfer_methods = ["deviceCodeFlow"]
+      grant = {
+        built_in_controls = ["block"]
+      }
+    }
   }
 }

@@ -83,6 +83,7 @@ These are built into the configuration and apply to every policy:
 | `ca001_block_legacy_auth` | CA001 - Block Legacy Authentication | `enabled` | Blocks `exchangeActiveSync` and `other` (legacy) clients for all users. |
 | `ca002_mfa_admins` | CA002 - Require MFA for Administrators | `enabled` | Requires MFA for Global Admin, Privileged Role Admin, Security Admin, and Conditional Access Admin. |
 | `ca003_mfa_all_users` | CA003 - Require MFA for All Users | `enabled` | Requires MFA for all users. |
+| `ca004_block_device_code_flow` | CA004 - Block Device Code Flow | report-only | Blocks the device code authentication flow for all users, closing off device code phishing. |
 
 ## Adding a policy
 
@@ -92,8 +93,8 @@ Add an entry to `local.policies` in `conditional_access_policies.tf`. The key be
 the old key to the new one.
 
 ```hcl
-ca004_block_unmanaged_devices = {
-  display_name   = "CA004 - Block Unmanaged Devices"
+ca005_block_unmanaged_devices = {
+  display_name   = "CA005 - Block Unmanaged Devices"
   included_users = ["All"]
   grant = {
     built_in_controls = ["compliantDevice"]
