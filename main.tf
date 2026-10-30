@@ -1,6 +1,6 @@
 resource "azuread_conditional_access_policy" "ca001_block_legacy_auth" {
   display_name = "CA001 - Block Legacy Authentication"
-  state        = "enabledForReeportingButNotEnforced"
+  state        = "enabledForReportingButNotEnforced"
 
   conditions {
     client_app_types = ["exchangeActiveSync", "other"]
@@ -16,7 +16,7 @@ resource "azuread_conditional_access_policy" "ca001_block_legacy_auth" {
   }
 
   grant_controls {
-    operator          = ["OR"]
+    operator          = "OR"
     built_in_controls = ["block"]
   }
 
