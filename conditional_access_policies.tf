@@ -7,6 +7,7 @@ locals {
       grant = {
         built_in_controls = ["block"]
       }
+      state = "enabled"
     }
 
     ca002_mfa_admins = {
