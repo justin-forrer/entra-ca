@@ -20,6 +20,10 @@ policies (for example the **Conditional Access Administrator** or **Security Adm
 role, i.e. the `Policy.ReadWrite.ConditionalAccess` and `Policy.Read.All` permissions), plus
 directory read access for the break-glass group lookup in `data.tf`.
 
+Conditional Access itself requires **Microsoft Entra ID P1**. Policies that use risk
+conditions (`sign_in_risk_levels` / `user_risk_levels`), such as CA005, additionally
+require **Microsoft Entra ID P2**, since sign-in and user risk come from ID Protection.
+
 ## Layout
 
 ```
@@ -84,6 +88,7 @@ These are built into the configuration and apply to every policy:
 | `ca002_mfa_admins` | CA002 - Require MFA for Administrators | `enabled` | Requires MFA for Global Admin, Privileged Role Admin, Security Admin, and Conditional Access Admin. |
 | `ca003_mfa_all_users` | CA003 - Require MFA for All Users | `enabled` | Requires MFA for all users. |
 | `ca004_block_device_code_flow` | CA004 - Block Device Code Flow | report-only | Blocks the device code authentication flow for all users, closing off device code phishing. |
+| `ca005_mfa_risky_signins` | CA005 - Require MFA for Risky Sign-Ins | `enabled` | Requires MFA for medium- and high-risk sign-ins, with sign-in frequency set to every time. **Requires Entra ID P2.** |
 
 ## Adding a policy
 
@@ -93,8 +98,8 @@ Add an entry to `local.policies` in `conditional_access_policies.tf`. The key be
 the old key to the new one.
 
 ```hcl
-ca005_block_unmanaged_devices = {
-  display_name   = "CA005 - Block Unmanaged Devices"
+ca006_block_unmanaged_devices = {
+  display_name   = "CA006 - Block Unmanaged Devices"
   included_users = ["All"]
   grant = {
     built_in_controls = ["compliantDevice"]

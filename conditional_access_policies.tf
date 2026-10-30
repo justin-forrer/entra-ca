@@ -41,5 +41,19 @@ locals {
         built_in_controls = ["block"]
       }
     }
+
+    ca005_mfa_risky_signins = {
+      display_name        = "CA005 - Require MFA for Risky Sign-Ins"
+      included_users      = ["All"]
+      sign_in_risk_levels = ["high", "medium"]
+      grant = {
+        built_in_controls = ["mfa"]
+      }
+      session = {
+        sign_in_frequency_interval            = "everyTime"
+        sign_in_frequency_authentication_type = "primaryAndSecondaryAuthentication"
+      }
+      state = "enabled"
+    }
   }
 }
