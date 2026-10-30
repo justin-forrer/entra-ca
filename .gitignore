@@ -1,0 +1,14 @@
+#Terraform working files
+./terraform
+**/.terraform/
+
+#State
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+!*.tfvars.exa
+
+#plan output
+tfplan
+plan.txt
