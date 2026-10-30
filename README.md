@@ -87,7 +87,7 @@ These are built into the configuration and apply to every policy:
 | `ca001_block_legacy_auth` | CA001 - Block Legacy Authentication | `enabled` | Blocks `exchangeActiveSync` and `other` (legacy) clients for all users. |
 | `ca002_mfa_admins` | CA002 - Require MFA for Administrators | `enabled` | Requires MFA for Global Admin, Privileged Role Admin, Security Admin, and Conditional Access Admin. |
 | `ca003_mfa_all_users` | CA003 - Require MFA for All Users | `enabled` | Requires MFA for all users. |
-| `ca004_block_device_code_flow` | CA004 - Block Device Code Flow | report-only | Blocks the device code authentication flow for all users, closing off device code phishing. |
+| `ca004_block_device_code_flow` | CA004 - Block Device Code Flow | `enabled` | Blocks the device code authentication flow for all users, closing off device code phishing. |
 | `ca005_mfa_risky_signins` | CA005 - Require MFA for Risky Sign-Ins | `enabled` | Requires MFA for medium- and high-risk sign-ins, with sign-in frequency set to every time. **Requires Entra ID P2.** |
 
 ## Adding a policy
