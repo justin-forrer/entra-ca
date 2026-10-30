@@ -146,6 +146,33 @@ Defined by the `policies` variable in `modules/conditional-access/variables.tf`.
 Omit `grant` or `session` entirely when a policy needs no grant or session controls; the
 module only emits the `grant_controls` / `session_controls` blocks when they are non-null.
 
+## Design decisions
+
+- **A guardrail module over raw resources.** HashiCorp's guidance is to avoid modules
+  that only wrap a single resource, and with one tenant each policy could be a plain
+  `azuread_conditional_access_policy`. The module earns its place by enforcing what no
+  individual policy can opt out of: the break-glass exclusion, report-only by default,
+  `prevent_destroy`, and a typed schema that rejects misspelled fields at plan time. It
+  also means a second tenant is one more module call rather than a copy of every policy.
+- **Fields are added as policies need them.** The module flattens the provider's nested
+  blocks into one object per policy, so each new Conditional Access feature (locations,
+  platforms, guests, user actions, ...) has to be wired through `variables.tf` and
+  `main.tf`. Fields are added when a policy needs them rather than mirroring the whole
+  provider schema up front. If that upkeep grows, the next step is to mirror the
+  provider's nested shape and pass blocks through with `dynamic`.
+- **HCL over YAML for policy definitions.** Loading policies with `yamldecode()` would
+  keep the module's guardrails, but YAML can't reference data sources or locals (every
+  group or location ID becomes a hard-coded GUID) and loses `terraform fmt` and editor
+  validation. YAML would be worth revisiting if non-Terraform reviewers need to own
+  policy changes.
+- **One policy file until it gets unwieldy.** Each policy is its own map entry, so diffs
+  and merge conflicts stay scoped to one policy. Past roughly 20–30 policies, the plan is
+  to split into per-category `locals` maps combined with `merge()`, plus a check that no
+  key is duplicated across files.
+- **Report-only first, then enable.** Every policy lands in report-only and is enabled in
+  a separate change after reviewing its impact in the Insights and reporting workbook,
+  so each enforcement step is its own reviewable commit.
+
 ## Notes
 
 - `main.tf` contains a `moved` block tracking CA001's migration from a root-level resource
