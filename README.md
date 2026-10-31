@@ -9,7 +9,7 @@ Policies are declared as data in a single `locals` block and rendered by one reu
 | Requirement | Version |
 | --- | --- |
 | Terraform | >= 1.6 |
-| `hashicorp/azuread` provider | >= 3.0 (locked at 3.10.0) |
+| `hashicorp/azuread` provider | ~> 3.10 (locked at 3.10.0) |
 
 The provider is configured with `tenant_id` only, so credentials come from the ambient
 environment — `az login` for local use, or OIDC through the `ARM_*` environment variables
@@ -78,7 +78,7 @@ no client secret exists to store or rotate.
 | | Pull request | Merge to `main` |
 | --- | --- | --- |
 | Workflow | `terraform-plan.yml` | `terraform-apply.yml` |
-| Steps | `fmt -check`, `init`, `validate`, `plan` | Approval, then `init`, `plan -out`, `apply` |
+| Steps | `fmt -check`, `init`, `validate`, `plan` | `init`, `plan -out`, `apply` |
 | Identity | `entra-ca-plan` | `entra-ca-apply` |
 | Federated subject | `...:pull_request` | `...:environment:production` |
 | Graph application permissions | `Policy.Read.All`, `Group.Read.All` | Those, plus `Policy.ReadWrite.ConditionalAccess` |
@@ -87,9 +87,9 @@ Controls around the pipeline:
 
 - **Separate identities.** The identity used on pull requests has no permission to change
   policies, even if a pull request edits the workflow itself.
-- **Approval gate.** The `production` environment requires a reviewer and only accepts
-  deployments from `main`. The approval happens before the job starts, so review the pull
-  request's plan result first.
+- **Merge is the approval.** Merging to `main` starts the apply with no further sign-off, so
+  review the pull request's plan result before merging. The `production` environment only
+  accepts deployments from `main`, which keeps the apply identity off other branches.
 - **Branch protection.** `main` requires a pull request and a passing `plan` check, blocks
   force pushes and deletion, and has no bypass.
 - **Fork safety.** Workflows use `pull_request`, never `pull_request_target`, so fork pull
