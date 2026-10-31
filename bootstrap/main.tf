@@ -27,6 +27,7 @@ resource "azurerm_storage_account" "tfstate" {
   name                            = "jforrerentracatfstate"
   resource_group_name             = azurerm_resource_group.tfstate.name
   shared_access_key_enabled       = false
+  local_user_enabled              = false
   tags                            = local.tags
 
   blob_properties {
