@@ -239,6 +239,10 @@ module only emits the `grant_controls` / `session_controls` blocks when they are
 - **Report-only first, then enable.** Every policy lands in report-only and is enabled in
   a separate change after reviewing its impact in the Insights and reporting workbook,
   so each enforcement step is its own reviewable commit.
+- **Merge triggers apply.** This is a single-maintainer repository, so a separate deployment
+  approval would be the same person approving twice. With a team, this would change to
+  required reviews through CODEOWNERS, plus a deployment approval where separation of duties
+  is required.
 
 ## Notes
 
