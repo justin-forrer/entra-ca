@@ -10,6 +10,12 @@ resource "azurerm_storage_container" "tfstate" {
   storage_account_id    = azurerm_storage_account.tfstate.id
 }
 
+resource "azurerm_storage_container" "bootstrap" {
+  container_access_type = "private"
+  name                  = "tfstate-bootstrap"
+  storage_account_id    = azurerm_storage_account.tfstate.id
+}
+
 resource "azurerm_storage_account" "tfstate" {
   account_replication_type        = "LRS"
   account_tier                    = "Standard"
