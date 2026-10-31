@@ -12,13 +12,13 @@ Policies are declared as data in a single `locals` block and rendered by one reu
 | `hashicorp/azuread` provider | >= 3.0 (locked at 3.10.0) |
 
 The provider is configured with `tenant_id` only, so credentials come from the ambient
-environment — `az login` for local use, or the `ARM_*` / `AZURE_*` environment variables
-in CI.
+environment — `az login` for local use, or OIDC through the `ARM_*` environment variables
+in CI (see [CI/CD](#cicd)).
 
-The identity running Terraform needs permission to read and write Conditional Access
-policies (for example the **Conditional Access Administrator** or **Security Administrator**
-role, i.e. the `Policy.ReadWrite.ConditionalAccess` and `Policy.Read.All` permissions), plus
-directory read access for the break-glass group lookup in `data.tf`.
+The identity running Terraform needs `Policy.Read.All` and `Group.Read.All` to plan, plus
+`Policy.ReadWrite.ConditionalAccess` to apply, and **Storage Blob Data Contributor** on the
+state container. Locally, the equivalent is a role such as **Conditional Access
+Administrator** with directory read access for the break-glass group lookup in `data.tf`.
 
 Conditional Access itself requires **Microsoft Entra ID P1**. Policies that use risk
 conditions (`sign_in_risk_levels` / `user_risk_levels`), such as CA005, additionally
@@ -35,13 +35,15 @@ require **Microsoft Entra ID P2**, since sign-in and user risk come from ID Prot
 ├── conditional_access_policies.tf   # local.policies — the policy catalog
 ├── main.tf                          # module call + moved block
 ├── outputs.tf                       # policy_ids
-└── modules/conditional-access/      # renders local.policies into azuread_conditional_access_policy
+├── modules/conditional-access/      # renders local.policies into azuread_conditional_access_policy
+├── bootstrap/                       # state storage and pipeline identities (run by hand)
+└── .github/workflows/               # plan on pull request, apply on merge
 ```
 
 ## Inputs
 
-Set these in `terraform.tfvars` (gitignored — it is not checked in, so each operator
-supplies their own):
+Set these in `terraform.tfvars` for local runs (gitignored — it is not checked in, so each
+operator supplies their own). CI gets the same values from GitHub Actions secrets:
 
 | Variable | Description |
 | --- | --- |
@@ -62,6 +64,71 @@ terraform apply
 ```
 
 `terraform output policy_ids` returns a map of policy key → Entra policy ID.
+
+Changes reach the tenant through a pull request rather than a local `terraform apply`:
+`main` is protected, and merging starts the apply workflow. Local runs are still useful for
+reading a plan in full, since CI keeps plan details out of its public logs. They need
+`az login` and a data role on the state container.
+
+## CI/CD
+
+GitHub Actions authenticates to Entra and Azure with OIDC workload identity federation, so
+no client secret exists to store or rotate.
+
+| | Pull request | Merge to `main` |
+| --- | --- | --- |
+| Workflow | `terraform-plan.yml` | `terraform-apply.yml` |
+| Steps | `fmt -check`, `init`, `validate`, `plan` | Approval, then `init`, `plan -out`, `apply` |
+| Identity | `entra-ca-plan` | `entra-ca-apply` |
+| Federated subject | `...:pull_request` | `...:environment:production` |
+| Graph application permissions | `Policy.Read.All`, `Group.Read.All` | Those, plus `Policy.ReadWrite.ConditionalAccess` |
+
+Controls around the pipeline:
+
+- **Separate identities.** The identity used on pull requests has no permission to change
+  policies, even if a pull request edits the workflow itself.
+- **Approval gate.** The `production` environment requires a reviewer and only accepts
+  deployments from `main`. The approval happens before the job starts, so review the pull
+  request's plan result first.
+- **Branch protection.** `main` requires a pull request and a passing `plan` check, blocks
+  force pushes and deletion, and has no bypass.
+- **Fork safety.** Workflows use `pull_request`, never `pull_request_target`, so fork pull
+  requests get no secrets or OIDC token. They also need approval to run.
+- **Supply chain.** Only GitHub-owned actions and `hashicorp/setup-terraform` are allowed,
+  and actions must be pinned to a full commit SHA.
+- **Public logs.** The repository is public, so plan and apply output is written to a file
+  on the runner. Only the one-line result reaches the job summary, and configuration values
+  are stored as secrets so that they are masked in logs.
+
+## Bootstrap
+
+`bootstrap/` manages what the pipeline depends on, so it can't be run by the pipeline. An
+administrator runs it by hand with `az login`:
+
+- The state resource group and storage account, with separate `tfstate` and
+  `tfstate-bootstrap` containers. Account keys are disabled, so all access goes through
+  Entra, and blob versioning and soft delete allow state to be recovered.
+- The `entra-ca-plan` and `entra-ca-apply` app registrations and service principals, with
+  their federated credentials and Graph permission grants.
+- Storage Blob Data Contributor on the `tfstate` container for both identities. They have
+  no access to `tfstate-bootstrap`.
+
+```bash
+cd bootstrap
+terraform init
+terraform plan
+terraform apply
+```
+
+It needs `tenant_id` and `subscription_id` in its own `terraform.tfvars`. The administrator
+also needs Storage Blob Data Contributor on `tfstate-bootstrap`, which is granted outside this
+configuration. Its state is `bootstrap.tfstate` in that container, kept apart from the
+pipeline because it contains the storage account's keys, which can't be used while key access
+is disabled. The main configuration uses `entra-ca.tfstate` in `tfstate`.
+
+These resources were first created in the Azure portal and then adopted with `import` blocks.
+Those blocks were removed afterwards, so reproducing this elsewhere starts with a local
+backend: comment out the `backend` block, apply, then run `terraform init -migrate-state`.
 
 ## Safety behaviours
 
@@ -152,8 +219,8 @@ module only emits the `grant_controls` / `session_controls` blocks when they are
   that only wrap a single resource, and with one tenant each policy could be a plain
   `azuread_conditional_access_policy`. The module earns its place by enforcing what no
   individual policy can opt out of: the break-glass exclusion, report-only by default,
-  `prevent_destroy`, and a typed schema that rejects misspelled fields at plan time. It
-  also means a second tenant is one more module call rather than a copy of every policy.
+  `prevent_destroy`, and a typed schema with safe defaults. It also means a second tenant
+  is one more module call rather than a copy of every policy.
 - **Fields are added as policies need them.** The module flattens the provider's nested
   blocks into one object per policy, so each new Conditional Access feature (locations,
   platforms, guests, user actions, ...) has to be wired through `variables.tf` and
@@ -178,5 +245,5 @@ module only emits the `grant_controls` / `session_controls` blocks when they are
 - `main.tf` contains a `moved` block tracking CA001's migration from a root-level resource
   into the module. It can be deleted once every state file has been applied past that
   migration.
-- State is local (`terraform.tfstate`) and gitignored. Moving to a remote backend is
-  worth doing before more than one person applies this configuration.
+- State is stored in Azure Storage using the `azurerm` backend with Entra authentication,
+  and is locked with a blob lease during each run.
