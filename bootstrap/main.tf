@@ -46,10 +46,7 @@ resource "azuread_application" "apply" {
 
   required_resource_access {
     resource_app_id = "00000003-0000-0000-c000-000000000000" # Microsoft Graph
-    resource_access {
-      id   = "e1fe6dd8-ba31-4d61-89e7-88639da4683d" # User.Read
-      type = "Scope"
-    }
+
     resource_access {
       id   = "5b567255-7703-4780-807c-7be8301ae99b" # Group.Read.All
       type = "Role"
@@ -75,10 +72,7 @@ resource "azuread_application" "plan" {
 
   required_resource_access {
     resource_app_id = "00000003-0000-0000-c000-000000000000" # Microsoft Graph
-    resource_access {
-      id   = "e1fe6dd8-ba31-4d61-89e7-88639da4683d" # User.Read
-      type = "Scope"
-    }
+
     resource_access {
       id   = "5b567255-7703-4780-807c-7be8301ae99b" # Group.Read.All
       type = "Role"
