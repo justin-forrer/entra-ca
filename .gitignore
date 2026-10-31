@@ -1,5 +1,4 @@
 #Terraform working files
-./terraform
 **/.terraform/
 
 #State
@@ -7,7 +6,7 @@
 *.tfstate.*
 crash.log
 *.tfvars
-!*.tfvars.exa
+!*.tfvars.example
 
 #plan output
 tfplan

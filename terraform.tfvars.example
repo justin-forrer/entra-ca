@@ -1,0 +1,3 @@
+# Copy to terraform.tfvars and replace the placeholder values.
+tenant_id                   = "00000000-0000-0000-0000-000000000000"
+break_glass_group_object_id = "00000000-0000-0000-0000-000000000000"
