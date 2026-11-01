@@ -16,7 +16,7 @@ locals {
         "62e90394-69f5-4237-9190-012177145e10", # Global Administrator
         "e8611ab8-c189-46e8-94e1-60213ab1f814", #Privileged Role Administrator
         "194ae4cb-b126-40b2-bd5b-6091b380977d", #Security Administrator
-        "b1be1c3e-b65d-4f19-8427-f6fa0d97feb9", #Conditional Access Administrator      
+        "b1be1c3e-b65d-4f19-8427-f6fa0d97feb9", #Conditional Access Administrator
       ]
       grant = {
         built_in_controls = ["mfa"]
@@ -79,7 +79,7 @@ locals {
         # Built-in Phishing-resistant MFA strength
         authentication_strength_policy_id = "/policies/authenticationStrengthPolicies/00000000-0000-0000-0000-000000000004"
       }
-      # state omitted -> report-only until admins have registered a phishing-resistant method
+      state = "enabled"
     }
   }
 }
