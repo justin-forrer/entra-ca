@@ -156,6 +156,7 @@ These are built into the configuration and apply to every policy:
 | `ca003_mfa_all_users` | CA003 - Require MFA for All Users | `enabled` | Requires MFA for all users. |
 | `ca004_block_device_code_flow` | CA004 - Block Device Code Flow | `enabled` | Blocks the device code authentication flow for all users, closing off device code phishing. |
 | `ca005_mfa_risky_signins` | CA005 - Require MFA for Risky Sign-Ins | `enabled` | Requires MFA for medium- and high-risk sign-ins, with sign-in frequency set to every time. **Requires Entra ID P2.** |
+| `ca006_phishing_resistant_admins` | CA006 - Require Phishing-Resistant MFA for Administrators | `enabledForReportingButNotEnforced` | Requires the built-in Phishing-resistant MFA authentication strength for Microsoft's 14 recommended administrator roles. Register a FIDO2 key, passkey, Windows Hello for Business, or multifactor certificate for every admin before enabling, or they will be locked out. |
 
 ## Adding a policy
 
@@ -165,8 +166,8 @@ Add an entry to `local.policies` in `conditional_access_policies.tf`. The key be
 the old key to the new one.
 
 ```hcl
-ca006_block_unmanaged_devices = {
-  display_name   = "CA006 - Block Unmanaged Devices"
+ca007_block_unmanaged_devices = {
+  display_name   = "CA007 - Block Unmanaged Devices"
   included_users = ["All"]
   grant = {
     built_in_controls = ["compliantDevice"]
