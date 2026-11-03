@@ -12,3 +12,8 @@ variable "break_glass_group_object_id" {
   description = "Object. ID of the group holding emergency access (breakglass) accounts in Entra ID"
   type        = string
 }
+
+variable "break_glass_au_object_id" {
+  description = "Object ID of the administrative unit holding emergency access (breakglass) accounts in Entra ID"
+  type        = string
+}
