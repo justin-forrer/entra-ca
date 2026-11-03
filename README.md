@@ -205,10 +205,13 @@ The account IDs are read from the group, so a new account is covered once `boots
 applied again. The change rule matches object IDs rather than a list of activity names, so it
 doesn't need updating when Entra adds new audit activities.
 
-Each rule runs every 5 minutes over the last 15 minutes. The overlap catches log rows that
-reach the workspace late, and notifications are muted for 15 minutes after each alert so one
-event isn't sent three times. Entra logs usually arrive within a few minutes, but can take
-up to about 15, so expect an alert 5 to 20 minutes after the event.
+Each rule checks the last 5 minutes every 5 minutes, and Azure Monitor retries an evaluation
+when log data arrives late. The sign-in rule is split by account, so each account sends its
+own email naming it. Actions are never muted. An earlier version muted them for 15 minutes to
+avoid duplicate emails from overlapping windows, and testing showed that it also hid the
+second account's sign-in. A duplicate email is better than a missed one. Entra logs usually
+arrive within a few minutes, but can take up to about 15, so expect an alert 5 to 20 minutes
+after the event.
 
 Unlike the guardrails, alerting doesn't depend on the pipeline running, so it also covers
 changes made between pull requests. Applying `bootstrap/` for a legitimate unit or group
