@@ -60,6 +60,10 @@ resource "azuread_application" "apply" {
       id   = "01c0a623-fc9b-48e9-b794-0756f8e8f067" # Policy.ReadWrite.ConditionalAccess
       type = "Role"
     }
+    resource_access {
+      id   = "134fd756-38ce-4afd-ba33-e9623dbe66c2" # AdministrativeUnit.Read.All
+      type = "Role"
+    }
   }
 }
 
@@ -80,6 +84,10 @@ resource "azuread_application" "plan" {
     }
     resource_access {
       id   = "246dd0d5-5bd0-4def-940b-0421030a5b68" # Policy.Read.All
+      type = "Role"
+    }
+    resource_access {
+      id   = "134fd756-38ce-4afd-ba33-e9623dbe66c2" # AdministrativeUnit.Read.All
       type = "Role"
     }
   }
@@ -123,6 +131,12 @@ resource "azuread_app_role_assignment" "plan_policy_read" {
   resource_object_id  = data.azuread_service_principal.msgraph.object_id
 }
 
+resource "azuread_app_role_assignment" "plan_au_read" {
+  app_role_id         = data.azuread_service_principal.msgraph.app_role_ids["AdministrativeUnit.Read.All"]
+  principal_object_id = azuread_service_principal.plan.object_id
+  resource_object_id  = data.azuread_service_principal.msgraph.object_id
+}
+
 resource "azuread_app_role_assignment" "apply_group_read" {
   app_role_id         = data.azuread_service_principal.msgraph.app_role_ids["Group.Read.All"]
   principal_object_id = azuread_service_principal.apply.object_id
@@ -137,6 +151,12 @@ resource "azuread_app_role_assignment" "apply_policy_read" {
 
 resource "azuread_app_role_assignment" "apply_ca_write" {
   app_role_id         = data.azuread_service_principal.msgraph.app_role_ids["Policy.ReadWrite.ConditionalAccess"]
+  principal_object_id = azuread_service_principal.apply.object_id
+  resource_object_id  = data.azuread_service_principal.msgraph.object_id
+}
+
+resource "azuread_app_role_assignment" "apply_au_read" {
+  app_role_id         = data.azuread_service_principal.msgraph.app_role_ids["AdministrativeUnit.Read.All"]
   principal_object_id = azuread_service_principal.apply.object_id
   resource_object_id  = data.azuread_service_principal.msgraph.object_id
 }
