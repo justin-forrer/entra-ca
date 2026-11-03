@@ -27,3 +27,14 @@ variable "break_glass_group_object_id" {
     error_message = "Invalid group object ID format. break_glass_group_object_id must be a valid GUID."
   }
 }
+
+variable "alert_email" {
+  description = "Email address notified when a break-glass account signs in or is changed."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", var.alert_email))
+    error_message = "alert_email must be a valid email address."
+  }
+}

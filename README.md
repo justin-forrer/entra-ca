@@ -39,7 +39,7 @@ require **Microsoft Entra ID P2**, since sign-in and user risk come from ID Prot
 ├── main.tf                          # module call + moved block
 ├── outputs.tf                       # policy_ids
 ├── modules/conditional-access/      # renders local.policies into azuread_conditional_access_policy
-├── bootstrap/                       # state storage, pipeline identities, break-glass admin unit (run by hand)
+├── bootstrap/                       # state, pipeline identities, break-glass admin unit and alerting (run by hand)
 └── .github/workflows/               # plan on pull request, apply on merge
 ```
 
@@ -117,7 +117,8 @@ administrator runs it by hand with `az login`:
   their federated credentials and Graph permission grants.
 - Storage Blob Data Contributor on the `tfstate` container for both identities. They have
   no access to `tfstate-bootstrap`.
-- The restricted management administrative unit for the break-glass accounts (see
+- The restricted management administrative unit for the break-glass accounts, and the
+  Log Analytics workspace, Entra diagnostic setting and alert rules that monitor them (see
   [Break-glass protection](#break-glass-protection)).
 
 ```bash
@@ -127,11 +128,12 @@ terraform plan
 terraform apply
 ```
 
-It needs `tenant_id`, `subscription_id` and `break_glass_group_object_id` in its own
-`terraform.tfvars`. The administrator also needs **Privileged Role Administrator** or
-**Global Administrator** to create the admin unit and enroll members. The administrator
-also needs Storage Blob Data Contributor on `tfstate-bootstrap`, which is granted outside this
-configuration. Its state is `bootstrap.tfstate` in that container, kept apart from the
+It needs `tenant_id`, `subscription_id`, `break_glass_group_object_id` and `alert_email`
+in its own `terraform.tfvars`, which is gitignored so the alert address stays out of the
+repository. The administrator needs **Global Administrator**, or both **Privileged Role
+Administrator** (for the admin unit) and **Security Administrator** (for the diagnostic
+setting), plus Storage Blob Data Contributor on `tfstate-bootstrap`, which is granted outside
+this configuration. Its state is `bootstrap.tfstate` in that container, kept apart from the
 pipeline because it contains the storage account's keys, which can't be used while key access
 is disabled. The main configuration uses `entra-ca.tfstate` in `tfstate`.
 
@@ -187,6 +189,31 @@ the apply if:
 These read live state from the tenant, so they catch drift made outside Terraform as well as
 mistakes in this repository.
 
+### Alerting
+
+`bootstrap/alerting.tf` follows Microsoft's guidance to alert on every use of an emergency
+access account. An Entra diagnostic setting sends `SignInLogs`, `NonInteractiveUserSignInLogs`
+and `AuditLogs` to the `log-entra-ca` Log Analytics workspace, and two severity 0 log search
+alert rules email the `ag-break-glass` action group:
+
+| Rule | Fires on |
+| --- | --- |
+| Break-glass account sign-in | Any interactive or non-interactive sign-in attempt by a break-glass account, successful or not. |
+| Break-glass account or admin unit change | Any audit event that names the unit, the group or an account as its target or its initiator, plus any restricted management administrative unit activity. This covers membership, role, credential and property changes, and deleting the unit. |
+
+The account IDs are read from the group, so a new account is covered once `bootstrap/` is
+applied again. The change rule matches object IDs rather than a list of activity names, so it
+doesn't need updating when Entra adds new audit activities.
+
+Each rule runs every 5 minutes over the last 15 minutes. The overlap catches log rows that
+reach the workspace late, and notifications are muted for 15 minutes after each alert so one
+event isn't sent three times. Entra logs usually arrive within a few minutes, but can take
+up to about 15, so expect an alert 5 to 20 minutes after the event.
+
+Unlike the guardrails, alerting doesn't depend on the pipeline running, so it also covers
+changes made between pull requests. Applying `bootstrap/` for a legitimate unit or group
+change fires the change alert too. That is expected, and confirms the rule works.
+
 ### Runbook
 
 | Task | How |
@@ -194,6 +221,8 @@ mistakes in this repository.
 | Add or remove a break-glass account | The group's membership is locked while it is in the unit. Assign yourself **Groups Administrator** scoped to the unit, change the membership, remove the assignment, then apply `bootstrap/` to enroll or unenroll the account. Plans in the main configuration fail until the unit matches the group. |
 | Reset a break-glass password or MFA method | No role that can be scoped to a unit can reset a Global Administrator's credentials, so the account has to leave the unit first. Remove it from the unit as a Global Administrator or Privileged Role Administrator, make the change, then apply `bootstrap/` to enroll it again. Plans in the main configuration fail while it's out, which is the reminder. |
 | A drift postcondition fails | Treat it as a possible incident. Check the Entra audit log for the change before restoring anything, then fix it in the tenant or by applying `bootstrap/`. Policy changes are blocked until the check passes. |
+| A break-glass alert fires | Confirm whether the use or change was planned. If it wasn't, treat it as an incident: review the account's sign-in and audit logs from the time of the alert, and use the other break-glass account or a normal admin account to contain it. Either way, record why the account was used. |
+| Test the accounts | Microsoft recommends signing in to each account at least every 90 days. Each test should fire the sign-in alert, which also confirms the alerting still works. |
 
 Don't leave a role assigned at the unit's scope after a change. Any standing assignment there
 is a way around the protection.
@@ -207,8 +236,18 @@ is a way around the protection.
 - **Directory role assignments aren't covered.** The unit restricts changes to the member
   objects, not role assignments to them. A Privileged Role Administrator can still remove the
   Global Administrator role from a break-glass account.
-- **Drift is detected only when the pipeline runs.** There's no scheduled plan, so a change
-  made between pull requests goes unnoticed until the next one.
+- **Guardrails only run with the pipeline.** There's no scheduled plan, so the postconditions
+  only check the unit when a pull request or merge runs. Alerting covers the time in between,
+  but only notifies. It doesn't fix the change or block anything.
+- **Alerting can be switched off.** Anyone with write access to the `rg-entra-ca-monitoring`
+  resource group, or a Security Administrator who deletes the Entra diagnostic setting, can
+  stop the alerts without triggering them. With a team, this would be covered by an Azure
+  activity log alert on those resources and by restricting who holds those roles.
+- **Alerts aren't instant.** Log ingestion and the 5-minute schedule mean an alert can take
+  up to about 20 minutes. That's enough to start an investigation, not to stop an attacker
+  in progress.
+- **Email is the only channel.** A missed or filtered email means a missed alert. SMS or a
+  paging service would be the next step for a real tenant.
 - **A failing check blocks unrelated changes.** Because the postconditions run on every plan,
   any drift stops all Conditional Access changes until it is fixed, including during a
   recovery. This is deliberate: an unprotected break-glass account is worth stopping for.
