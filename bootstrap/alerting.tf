@@ -64,22 +64,22 @@ resource "azurerm_monitor_action_group" "break_glass" {
   }
 }
 
-# Both rules look back 15 minutes every 5 minutes, so rows that arrive late in the
-# workspace are still caught. Muting for 15 minutes after a notification stops the
-# overlapping windows from sending the same alert three times.
+# Both rules check the last 5 minutes every 5 minutes, so each event is evaluated
+# once. Azure Monitor retries an evaluation when log data arrives late, so the
+# windows don't need to overlap. Actions are never muted: muting would hide a
+# second event that happens soon after the first.
 
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "break_glass_sign_in" {
-  description                       = "Any sign-in attempt, interactive or not, by a break-glass account."
-  display_name                      = "Break-glass account sign-in"
-  evaluation_frequency              = "PT5M"
-  location                          = azurerm_resource_group.monitoring.location
-  mute_actions_after_alert_duration = "PT15M"
-  name                              = "alert-break-glass-sign-in"
-  resource_group_name               = azurerm_resource_group.monitoring.name
-  scopes                            = [azurerm_log_analytics_workspace.entra.id]
-  severity                          = 0
-  tags                              = local.monitoring_tags
-  window_duration                   = "PT15M"
+  description          = "Any sign-in attempt, interactive or not, by a break-glass account."
+  display_name         = "Break-glass account sign-in"
+  evaluation_frequency = "PT5M"
+  location             = azurerm_resource_group.monitoring.location
+  name                 = "alert-break-glass-sign-in"
+  resource_group_name  = azurerm_resource_group.monitoring.name
+  scopes               = [azurerm_log_analytics_workspace.entra.id]
+  severity             = 0
+  tags                 = local.monitoring_tags
+  window_duration      = "PT5M"
 
   depends_on = [azurerm_resource_provider_registration.alerts_management]
 
@@ -92,6 +92,13 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "break_glass_sign_in" 
       | where UserId in (dynamic(${jsonencode(local.break_glass_user_ids)}))
       | project TimeGenerated, Type, UserPrincipalName, AppDisplayName, IPAddress, ResultType
     KQL
+
+    # One alert per account, so a sign-in to each sends its own email that names it.
+    dimension {
+      name     = "UserPrincipalName"
+      operator = "Include"
+      values   = ["*"]
+    }
   }
 
   action {
@@ -100,17 +107,16 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "break_glass_sign_in" 
 }
 
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "break_glass_change" {
-  description                       = "Any directory change to, or by, the break-glass accounts, their group or their restricted admin unit."
-  display_name                      = "Break-glass account or admin unit change"
-  evaluation_frequency              = "PT5M"
-  location                          = azurerm_resource_group.monitoring.location
-  mute_actions_after_alert_duration = "PT15M"
-  name                              = "alert-break-glass-change"
-  resource_group_name               = azurerm_resource_group.monitoring.name
-  scopes                            = [azurerm_log_analytics_workspace.entra.id]
-  severity                          = 0
-  tags                              = local.monitoring_tags
-  window_duration                   = "PT15M"
+  description          = "Any directory change to, or by, the break-glass accounts, their group or their restricted admin unit."
+  display_name         = "Break-glass account or admin unit change"
+  evaluation_frequency = "PT5M"
+  location             = azurerm_resource_group.monitoring.location
+  name                 = "alert-break-glass-change"
+  resource_group_name  = azurerm_resource_group.monitoring.name
+  scopes               = [azurerm_log_analytics_workspace.entra.id]
+  severity             = 0
+  tags                 = local.monitoring_tags
+  window_duration      = "PT5M"
 
   depends_on = [azurerm_resource_provider_registration.alerts_management]
 
