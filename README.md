@@ -15,10 +15,13 @@ The provider is configured with `tenant_id` only, so credentials come from the a
 environment — `az login` for local use, or OIDC through the `ARM_*` environment variables
 in CI (see [CI/CD](#cicd)).
 
-The identity running Terraform needs `Policy.Read.All` and `Group.Read.All` to plan, plus
-`Policy.ReadWrite.ConditionalAccess` to apply, and **Storage Blob Data Contributor** on the
-state container. Locally, the equivalent is a role such as **Conditional Access
-Administrator** with directory read access for the break-glass group lookup in `data.tf`.
+`bootstrap/` also uses `microsoft/msgraph` 0.6.0 (see [Bootstrap](#bootstrap)).
+
+The identity running Terraform needs `Policy.Read.All`, `Group.Read.All` and
+`AdministrativeUnit.Read.All` to plan, plus `Policy.ReadWrite.ConditionalAccess` to apply,
+and **Storage Blob Data Contributor** on the state container. Locally, the equivalent is a
+role such as **Conditional Access Administrator** with directory read access for the
+break-glass lookups in `data.tf`.
 
 Conditional Access itself requires **Microsoft Entra ID P1**. Policies that use risk
 conditions (`sign_in_risk_levels` / `user_risk_levels`), such as CA005, additionally
@@ -29,14 +32,14 @@ require **Microsoft Entra ID P2**, since sign-in and user risk come from ID Prot
 ```
 .
 ├── versions.tf                      # Terraform + azuread provider constraints, provider config
-├── variables.tf                     # tenant_id, break_glass_group_object_id
+├── variables.tf                     # tenant_id, break-glass group and admin unit IDs
 ├── terraform.tfvars                 # local values (gitignored)
-├── data.tf                          # break-glass group lookup + membership guardrail
+├── data.tf                          # break-glass group and admin unit lookups + guardrails
 ├── conditional_access_policies.tf   # local.policies — the policy catalog
 ├── main.tf                          # module call + moved block
 ├── outputs.tf                       # policy_ids
 ├── modules/conditional-access/      # renders local.policies into azuread_conditional_access_policy
-├── bootstrap/                       # state storage and pipeline identities (run by hand)
+├── bootstrap/                       # state storage, pipeline identities, break-glass admin unit (run by hand)
 └── .github/workflows/               # plan on pull request, apply on merge
 ```
 
@@ -49,10 +52,12 @@ operator supplies their own). CI gets the same values from GitHub Actions secret
 | --- | --- |
 | `tenant_id` | Entra tenant ID. Validated as a GUID. |
 | `break_glass_group_object_id` | Object ID of the group holding emergency access (break-glass) accounts. |
+| `break_glass_au_object_id` | Object ID of the restricted management administrative unit protecting them. Output by `bootstrap/` as `break_glass_au_object_id`. |
 
 ```hcl
 tenant_id                   = "00000000-0000-0000-0000-000000000000"
 break_glass_group_object_id = "00000000-0000-0000-0000-000000000000"
+break_glass_au_object_id    = "00000000-0000-0000-0000-000000000000"
 ```
 
 ## Usage
@@ -81,7 +86,7 @@ no client secret exists to store or rotate.
 | Steps | `fmt -check`, `init`, `validate`, `plan` | `init`, `plan -out`, `apply` |
 | Identity | `entra-ca-plan` | `entra-ca-apply` |
 | Federated subject | `...:pull_request` | `...:environment:production` |
-| Graph application permissions | `Policy.Read.All`, `Group.Read.All` | Those, plus `Policy.ReadWrite.ConditionalAccess` |
+| Graph application permissions | `Policy.Read.All`, `Group.Read.All`, `AdministrativeUnit.Read.All` | Those, plus `Policy.ReadWrite.ConditionalAccess` |
 
 Controls around the pipeline:
 
@@ -112,6 +117,8 @@ administrator runs it by hand with `az login`:
   their federated credentials and Graph permission grants.
 - Storage Blob Data Contributor on the `tfstate` container for both identities. They have
   no access to `tfstate-bootstrap`.
+- The restricted management administrative unit for the break-glass accounts (see
+  [Break-glass protection](#break-glass-protection)).
 
 ```bash
 cd bootstrap
@@ -120,15 +127,94 @@ terraform plan
 terraform apply
 ```
 
-It needs `tenant_id` and `subscription_id` in its own `terraform.tfvars`. The administrator
+It needs `tenant_id`, `subscription_id` and `break_glass_group_object_id` in its own
+`terraform.tfvars`. The administrator also needs **Privileged Role Administrator** or
+**Global Administrator** to create the admin unit and enroll members. The administrator
 also needs Storage Blob Data Contributor on `tfstate-bootstrap`, which is granted outside this
 configuration. Its state is `bootstrap.tfstate` in that container, kept apart from the
 pipeline because it contains the storage account's keys, which can't be used while key access
 is disabled. The main configuration uses `entra-ca.tfstate` in `tfstate`.
 
-These resources were first created in the Azure portal and then adopted with `import` blocks.
-Those blocks were removed afterwards, so reproducing this elsewhere starts with a local
-backend: comment out the `backend` block, apply, then run `terraform init -migrate-state`.
+The state and identity resources were first created in the Azure portal and then adopted
+with `import` blocks. Those blocks were removed afterwards, so reproducing this elsewhere
+starts with a local backend: comment out the `backend` block, apply, then run
+`terraform init -migrate-state`.
+
+## Break-glass protection
+
+The emergency access accounts are excluded from every policy, which makes them the most
+valuable accounts in the tenant. Conditional Access can't protect them, so other controls
+do.
+
+### Restricted management administrative unit
+
+`bootstrap/break_glass.tf` creates the administrative unit **RMAU - Emergency Access** with
+`isMemberManagementRestricted = true`, and enrolls the break-glass group and each of its
+members. In a restricted unit, tenant-wide roles, including Global Administrator and
+Privileged Role Administrator, can't change the member objects. Only roles assigned at the
+unit's own scope can, and none are assigned. Password resets, MFA method changes, property
+edits, disabling and deleting the accounts are all blocked, as is changing the group's
+membership.
+
+It is managed from `bootstrap/` rather than the main configuration for two reasons:
+
+- **The pipeline shouldn't be able to change it.** Creating a unit and enrolling members
+  needs `AdministrativeUnit.ReadWrite.All` and either `Directory.Write.Restricted` or a
+  privileged role. Giving those to `entra-ca-apply` would let anyone who can merge a pull
+  request remove the protection. The pipeline only gets `AdministrativeUnit.Read.All`.
+- **It changes rarely.** It is set up once and touched only when the break-glass accounts
+  change, which already needs an administrator.
+
+`isMemberManagementRestricted` can only be set when a unit is created, and the `azuread`
+provider doesn't support it, so the unit itself is a `msgraph_resource` from the
+`microsoft/msgraph` provider. Membership uses `azuread_administrative_unit_member`. The unit
+has `prevent_destroy`, because deleting it is the one change that removes the protection
+from every member at once.
+
+Membership in an administrative unit isn't inherited through groups, so the group and each
+account are enrolled separately. A new break-glass account is protected only after
+`bootstrap/` is applied again.
+
+### Guardrails in the main configuration
+
+Postconditions in `data.tf` run on every plan, so they fail both the pull request check and
+the apply if:
+
+- the break-glass group has fewer than 2 members,
+- the group has any owners, since an owner could change its membership, or
+- the group or any of its members is missing from the restricted unit.
+
+These read live state from the tenant, so they catch drift made outside Terraform as well as
+mistakes in this repository.
+
+### Runbook
+
+| Task | How |
+| --- | --- |
+| Add or remove a break-glass account | The group's membership is locked while it is in the unit. Assign yourself **Groups Administrator** scoped to the unit, change the membership, remove the assignment, then apply `bootstrap/` to enroll or unenroll the account. Plans in the main configuration fail until the unit matches the group. |
+| Reset a break-glass password or MFA method | No role that can be scoped to a unit can reset a Global Administrator's credentials, so the account has to leave the unit first. Remove it from the unit as a Global Administrator or Privileged Role Administrator, make the change, then apply `bootstrap/` to enroll it again. Plans in the main configuration fail while it's out, which is the reminder. |
+| A drift postcondition fails | Treat it as a possible incident. Check the Entra audit log for the change before restoring anything, then fix it in the tenant or by applying `bootstrap/`. Policy changes are blocked until the check passes. |
+
+Don't leave a role assigned at the unit's scope after a change. Any standing assignment there
+is a way around the protection.
+
+### Known gaps
+
+- **Global Administrators can still remove the protection.** They can't change the members,
+  but they can remove members from the unit, delete it, or assign themselves a role scoped to
+  it. The unit turns a single change into several audited steps, but doesn't stop a
+  determined Global Administrator.
+- **Directory role assignments aren't covered.** The unit restricts changes to the member
+  objects, not role assignments to them. A Privileged Role Administrator can still remove the
+  Global Administrator role from a break-glass account.
+- **Drift is detected only when the pipeline runs.** There's no scheduled plan, so a change
+  made between pull requests goes unnoticed until the next one.
+- **A failing check blocks unrelated changes.** Because the postconditions run on every plan,
+  any drift stops all Conditional Access changes until it is fixed, including during a
+  recovery. This is deliberate: an unprotected break-glass account is worth stopping for.
+- **Restricted units exclude some features.** Members can't be managed with PIM, access
+  reviews or entitlement management, which is acceptable because break-glass accounts hold
+  permanent roles by design.
 
 ## Safety behaviours
 
@@ -137,8 +223,9 @@ These are built into the configuration and apply to every policy:
 - **Break-glass exclusion.** The module appends `var.break_glass_group_id` to every
   policy's `excluded_groups`, so emergency access accounts can never be locked out by a
   policy managed here.
-- **Break-glass group must be populated.** A `postcondition` in `data.tf` fails the plan
-  if the group has fewer than 2 members.
+- **Break-glass group must be protected.** Postconditions in `data.tf` fail the plan if the
+  group has fewer than 2 members, has any owners, or isn't fully enrolled in the restricted
+  admin unit (see [Break-glass protection](#break-glass-protection)).
 - **Report-only by default.** A policy with no explicit `state` is created as
   `enabledForReportingButNotEnforced`. Enforcement is opt-in per policy.
 - **`prevent_destroy`.** Policies cannot be destroyed by Terraform. To retire one, set
